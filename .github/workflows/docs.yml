@@ -1,0 +1,39 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "**.md"]
+
+jobs:
+  build-docs:
+    name: Build markdown docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install markdown pygments
+      - name: Render docs → HTML
+        run: |
+          python - <<'PY'
+          import pathlib, markdown
+          src = pathlib.Path("docs")
+          out = pathlib.Path("artifacts/docs_html")
+          out.mkdir(parents=True, exist_ok=True)
+          for md_file in src.glob("*.md"):
+              html = markdown.markdown(
+                  md_file.read_text(),
+                  extensions=["fenced_code", "codehilite", "tables"],
+              )
+              (out / f"{md_file.stem}.html").write_text(
+                  f"<html><head><meta charset='utf-8'></head><body>{html}</body></html>"
+              )
+          print(f"Rendered {len(list(src.glob('*.md')))} docs → {out}")
+          PY
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: artifacts/docs_html/
