@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  nqal-train:
+    build: .
+    image: nqal-doh:latest
+    container_name: nqal-train
+    volumes:
+      - ./artifacts:/opt/nqal/artifacts
+      - ./data:/opt/nqal/data
+    command: >
+      python train.py
+        --config config/default.yaml
+        --data-dir data/processed
+        --output-dir artifacts/checkpoints
+    environment:
+      - PYTHONHASHSEED=42
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  nqal-eval:
+    image: nqal-doh:latest
+    container_name: nqal-eval
+    depends_on:
+      - nqal-train
+    volumes:
+      - ./artifacts:/opt/nqal/artifacts
+      - ./data:/opt/nqal/data
+    command: >
+      python evaluate.py
+        --config config/default.yaml
+        --data-dir data/processed
+        --checkpoint artifacts/checkpoints/nqal_final.pt
+        --output-dir artifacts/results
+
+  nqal-jupyter:
+    image: nqal-doh:latest
+    container_name: nqal-jupyter
+    volumes:
+      - ./:/opt/nqal
+    ports:
+      - "8888:8888"
+    command: >
+      jupyter notebook
+        --ip=0.0.0.0
+        --port=8888
+        --no-browser
+        --allow-root
+        --NotebookApp.token=''
+    profiles: ["notebook"]
+
+  nqal-experiments:
+    image: nqal-doh:latest
+    container_name: nqal-experiments
+    volumes:
+      - ./artifacts:/opt/nqal/artifacts
+      - ./data:/opt/nqal/data
+    command: bash run_all_experiments.sh
+    profiles: ["full"]
