@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install ruff black mypy
+      - name: Ruff (lint)
+        run: ruff check . --output-format=github || true
+      - name: Black (format check)
+        run: black --check --diff . || true
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Unit tests
+        run: pytest tests/ -v --cov=. --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  smoke:
+    name: End-to-end smoke test
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate mini dataset
+        run: |
+          python data/generate_dataset.py \
+            --config config/default.yaml \
+            --seed 42 \
+            --out-dir data/processed_smoke
+        # NOTE: this creates the full dataset; trim to a fraction:
+      - name: Trim dataset (keep it fast)
+        run: |
+          python - <<'PY'
+          import numpy as np, os
+          for split in ("train", "val", "test"):
+              X = np.load(f"data/processed_smoke/X_{split}.npy")[:200]
+              y = np.load(f"data/processed_smoke/y_{split}.npy")[:200]
+              np.save(f"data/processed_smoke/X_{split}.npy", X)
+              np.save(f"data/processed_smoke/y_{split}.npy", y)
+          PY
+
+      - name: Smoke train
+        run: |
+          python train.py \
+            --config config/default.yaml \
+            --data-dir data/processed_smoke \
+            --output-dir artifacts/checkpoints_smoke \
+            --smoke-test --max-samples 200 --epochs 1
+
+      - name: Smoke evaluate
+        run: |
+          python evaluate.py \
+            --config config/default.yaml \
+            --data-dir data/processed_smoke \
+            --checkpoint artifacts/checkpoints_smoke/nqal_final.pt \
+            --output-dir artifacts/results_smoke
+
+      - name: Assert metrics produced
+        run: |
+          test -f artifacts/results_smoke/evaluation_report.json
+          python - <<'PY'
+          import json
+          with open("artifacts/results_smoke/evaluation_report.json") as f:
+              r = json.load(f)
+          assert "clean" in r and "attacks" in r
+          assert "hardware" in r
+          print("Smoke metrics OK:", {k: r["clean"][k] for k in ("accuracy", "fpr")})
+          PY
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: nqal-doh:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke inside container
+        run: |
+          docker run --rm nqal-doh:ci \
+            python -c "from models.nqal_pipeline import NQALPipeline; print('container OK')"
