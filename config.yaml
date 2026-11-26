@@ -1,0 +1,58 @@
+# NQAL Configuration File
+
+data:
+  num_samples: 10000
+  sequence_length: 50
+  num_features: 4  # packet size, inter-arrival time, entropy, direction
+  num_classes: 5   # Benign, DNS Tunneling, C2 Beaconing, DGA, Adversarial DoH
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  random_seed: 42
+
+model:
+  snn:
+    num_neurons: 128
+    tau_mem: 20.0
+    tau_syn: 5.0
+    v_threshold: 1.0
+    v_reset: 0.0
+  dsgat:
+    hidden_dim: 64
+    num_heads: 4
+    dropout: 0.1
+  qni:
+    noise_scale: 0.05
+    qrw_steps: 10
+  zkp:
+    threshold_tau: 0.7
+    use_zk_snark: true
+  federated:
+    num_clients: 10
+    communication_rounds: 20
+    local_epochs: 3
+    swarm_beta: 0.1
+  gan:
+    latent_dim: 32
+    gen_hidden: 64
+    disc_hidden: 64
+    adv_weight: 0.1
+
+training:
+  batch_size: 64
+  learning_rate: 0.001
+  num_epochs: 50
+  adversarial_training: true
+  fgsm_epsilon: 0.03
+  pgd_epsilon: 0.05
+  pgd_steps: 10
+
+hardware:
+  energy_per_spike_pj: 0.1   # pJ per spike (Loihi 2 / Akida)
+  sparsity_penalty_lambda: 0.01
+  gpu_energy_per_inference_mj: 5.0  # baseline GPU energy
+  latency_scaling_factor: 0.01      # scale software latency to hardware
+
+evaluation:
+  metrics: ["accuracy", "fpr", "detection_rate", "latency", "energy"]
+  attack_scenarios: ["FGSM", "PGD", "QuantumNoise"]
