@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the following paper."
+authors:
+  - family-names: Ali
+    given-names: Basharat
+  - family-names: Chen
+    given-names: Guihai
+title: "Neuromorphic quantum adversarial learning (NQAL): a bio-inspired paradigm for DNS over HTTPS threat detection"
+journal: "EURASIP Journal on Information Security"
+year: 2025
+volume: 2025
+issue: 35
+doi: "10.1186/s13635-025-00215-5"
