@@ -1,21 +1,83 @@
-MIT License
 
-Copyright (c) 2026 dezignator
+---
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+### File 2: `setup_environment.sh` (v2 – Full Environment Bootstrap)
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+```bash
+#!/usr/bin/env bash
+# =============================================================================
+# NQAL-DoH Environment Bootstrap
+# Reproduces the exact environment used to generate the paper's results.
+# Tested on Ubuntu 22.04 LTS, Python 3.10.13, CUDA 12.1
+# =============================================================================
+set -euo pipefail
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$REPO_ROOT"
+
+LOG_DIR="$REPO_ROOT/artifacts/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/setup_$(date +%Y%m%d_%H%M%S).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo "=============================================================="
+echo " NQAL-DoH Environment Setup"
+echo " Date: $(date)"
+echo " Host: $(uname -a)"
+echo "=============================================================="
+
+# ------------------- 1. System checks ---------------------------------------
+echo "[1/6] Checking system prerequisites..."
+command -v python3 >/dev/null 2>&1 || { echo "python3 not found"; exit 1; }
+PY_VER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+echo "  Python version: $PY_VER"
+if [[ "$PY_VER" < "3.10" ]]; then
+  echo "ERROR: Python >= 3.10 required." >&2
+  exit 1
+fi
+
+# ------------------- 2. Virtual environment ---------------------------------
+echo "[2/6] Creating virtual environment..."
+if [[ ! -d ".venv" ]]; then
+  python3 -m venv .venv
+fi
+# shellcheck disable=SC1091
+source .venv/bin/activate
+python -m pip install --upgrade pip wheel setuptools
+
+# ------------------- 3. Python dependencies ---------------------------------
+echo "[3/6] Installing Python packages..."
+pip install --no-cache-dir -r requirements.txt
+pip install --no-cache-dir -r requirements-dev.txt
+
+# ------------------- 4. Neuromorphic simulator sanity -----------------------
+echo "[4/6] Verifying neuromorphic simulator..."
+python - <<'PY'
+from hardware.neuromorphic_simulator import NeuromorphicSimulator
+sim = NeuromorphicSimulator(profile="loihi2")
+lat, energy = sim.benchmark(num_spikes=10_000, num_steps=50)
+print(f"  Loihi2 profile: latency={lat:.4f} ms, energy={energy:.4f} pJ")
+assert lat < 1.0, "Latency sanity check failed"
+print("  OK")
+PY
+
+# ------------------- 5. Dataset generation ----------------------------------
+echo "[5/6] Generating datasets (seed=42)..."
+python data/generate_dataset.py \
+  --config config/default.yaml \
+  --seed 42 \
+  --out-dir data/processed
+
+# ------------------- 6. End-to-end smoke test -------------------------------
+echo "[6/6] Running smoke test (1 epoch, 100 samples)..."
+python train.py \
+  --config config/default.yaml \
+  --smoke-test \
+  --max-samples 100 \
+  --epochs 1
+
+echo "=============================================================="
+echo " Setup complete. Log: $LOG_FILE"
+echo " Activate:  source .venv/bin/activate"
+echo " Next:      python train.py --config config/default.yaml"
+echo "=============================================================="
