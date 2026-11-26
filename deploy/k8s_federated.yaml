@@ -1,0 +1,73 @@
+# =============================================================================
+# deploy/k8s_federated.yaml
+# Kubernetes deployment for the Swarm Federated Learning (Eq. 7)
+# Deploys the Go coordinator + 3 Python client pods
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fl-coordinator
+  labels:
+    app: nqal-fl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fl-coordinator
+  template:
+    metadata:
+      labels:
+        app: fl-coordinator
+    spec:
+      containers:
+      - name: coordinator
+        image: nqal-doh:v2
+        command: ["fl_coordinator"]
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fl-coordinator-service
+spec:
+  selector:
+    app: fl-coordinator
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nqal-client
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nqal-client
+  template:
+    metadata:
+      labels:
+        app: nqal-client
+    spec:
+      containers:
+      - name: client
+        image: nqal-doh:v2
+        env:
+        - name: COORDINATOR_URL
+          value: "http://fl-coordinator-service:8080"
+        command: 
+        - python
+        - -c
+        - |
+          import time, requests, os
+          url = os.environ["COORDINATOR_URL"] + "/update"
+          while True:
+              # Simulate sending model weights to coordinator
+              payload = {"client_id": os.uname()[1], "weights": [0.1, 0.2, 0.3], "gradient_norm_sq": 0.5}
+              requests.post(url, json=payload)
+              time.sleep(10)
