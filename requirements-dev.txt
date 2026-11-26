@@ -1,0 +1,22 @@
+# Development, testing, linting, notebooks
+-r requirements.txt
+
+pytest==8.3.3
+pytest-cov==5.0.0
+pytest-xdist==3.6.1
+hypothesis==6.112.1
+
+ruff==0.6.9
+black==24.8.0
+mypy==1.11.2
+pre-commit==3.8.0
+
+jupyter==1.0.0
+ipykernel==6.29.5
+nbconvert==7.16.4
+nbformat==5.10.4
+ipywidgets==8.1.5
+
+mkdocs==1.6.1
+mkdocs-material==9.5.34
+mkdocstrings[python]==0.25.2
