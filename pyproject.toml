@@ -1,0 +1,116 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nqal-doh"
+version = "2.0.0"
+description = "Neuromorphic Quantum Adversarial Learning for DoH threat detection"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Basharat Ali" },
+    { name = "Guihai Chen" },
+]
+keywords = [
+    "dns-over-https",
+    "neuromorphic",
+    "spiking-neural-network",
+    "quantum-noise",
+    "zero-knowledge-proof",
+    "federated-learning",
+    "threat-detection",
+    "adversarial-robustness",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "scikit-learn>=1.2",
+    "torch>=2.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.65",
+    "py_ecc>=7.0",
+    "cryptography>=41.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "hypothesis>=6.90",
+    "ruff>=0.6",
+    "black>=24.0",
+    "mypy>=1.9",
+    "pre-commit>=3.6",
+]
+notebook = [
+    "jupyter>=1.0",
+    "ipykernel>=6.25",
+    "nbconvert>=7.8",
+    "ipywidgets>=8.0",
+]
+viz = ["graphviz>=0.20"]
+
+[project.urls]
+Homepage = "https://github.com/your-org/NQAL-DoH"
+Documentation = "https://github.com/your-org/NQAL-DoH/tree/main/docs"
+Repository = "https://github.com/your-org/NQAL-DoH"
+Issues = "https://github.com/your-org/NQAL-DoH/issues"
+
+[project.scripts]
+nqal-train = "train:main"
+nqal-evaluate = "evaluate:main"
+
+[tool.setuptools]
+packages = [
+    "models",
+    "attacks",
+    "hardware",
+    "data",
+    "utils",
+    "experiments",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q --strict-markers"
+markers = [
+    "slow: slow tests (deselect with '-m \"not slow\"')",
+    "gpu: requires CUDA",
+]
+
+[tool.coverage.run]
+source = ["models", "attacks", "hardware", "data", "utils", "experiments"]
+omit = ["tests/*", "notebooks/*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "N", "W", "B", "UP", "C4", "SIM"]
+ignore = ["E501", "B008", "N803", "N806"]
+exclude = ["notebooks/", "artifacts/"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_return_any = false
+warn_unused_configs = true
+exclude = '(^tests/|^experiments/|^notebooks/|^artifacts/)'
