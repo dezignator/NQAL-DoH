@@ -1,0 +1,2 @@
+from models.qni import QNI
+qni = QNI(eta=0.05, qrw_steps=10, lambda_kl=0.1, epsilon=0.05)
