@@ -1,0 +1,43 @@
+
+---
+
+## 3. Environment Setup (Reproducible)
+
+### 3.1 Hardware Requirements
+
+- **CPU**: ≥ 8 cores (for federated client simulation)
+- **RAM**: ≥ 16 GB
+- **GPU**: ≥ 8 GB (optional, for faster training; the paper reports on neuromorphic hardware but simulation runs on CPU/GPU)
+- **Disk**: ~5 GB (datasets + artifacts)
+- **Neuromorphic simulation**: `hardware/neuromorphic_simulator.py` emulates Intel Loihi 2 and BrainChip Akida timing/energy profiles using calibrated tables from published datasheets (0.1 pJ/spike for Loihi 2, 0.78 ms/query for Akida).
+
+### 3.2 Quick Start
+
+```bash
+# 1. Clone
+git clone https://github.com/<your-org>/NQAL-DoH.git
+cd NQAL-DoH
+
+# 2. Create environment (Python 3.10+)
+python -m venv .venv
+source .venv/bin/activate         # Linux/macOS
+# .venv\Scripts\activate.bat      # Windows
+
+# 3. Install
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 4. Verify environment
+python -c "from hardware.neuromorphic_simulator import NeuromorphicSimulator; print('OK')"
+
+# 5. Generate datasets
+python data/generate_dataset.py --config config/default.yaml --seed 42
+
+# 6. Train NQAL (federated + adversarial)
+python train.py --config config/default.yaml
+
+# 7. Evaluate (reproduces Table 2 + metrics)
+python evaluate.py --config config/default.yaml
+
+# 8. Full reproduction (all tables/figures, ~45 min on 8-core CPU)
+bash run_all_experiments.sh
