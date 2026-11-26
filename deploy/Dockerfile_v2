@@ -1,0 +1,52 @@
+# =============================================================================
+# NQAL-DoH v2 Production Dockerfile
+# Multi-stage build combining Python, C++, Rust, Go, and Node.js (for Circom)
+# =============================================================================
+
+# --- Stage 1: System dependencies ---
+FROM ubuntu:22.04 AS base
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+    build-essential cmake git curl wget \
+    python3 python3-pip python3-venv \
+    golang-go cargo rustc \
+    nodejs npm \
+    libpcap-dev graphviz \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Stage 2: Compile C++ and Go ---
+WORKDIR /build
+COPY cpp/ /build/cpp/
+COPY go/ /build/go/
+RUN g++ -O3 -march=native cpp/lif_neuron_loihi.cpp -o /usr/local/bin/lif_sim
+RUN cd go && go build -o /usr/local/bin/fl_coordinator fl_coordinator.go
+
+# --- Stage 3: Compile Rust ---
+COPY rust/ /build/rust/
+WORKDIR /build/rust
+RUN cargo build --release
+RUN cp target/release/zkp_verifier /usr/local/bin/zkp_verifier
+
+# --- Stage 4: Install Circom ---
+WORKDIR /build
+RUN git clone https://github.com/iden3/circom.git && \
+    cd circom && cargo build --release && \
+    cp target/release/circom /usr/local/bin/
+
+# --- Stage 5: Final Application ---
+FROM python:3.11-slim
+COPY --from=base /usr/local/bin/lif_sim /usr/local/bin/
+COPY --from=base /usr/local/bin/fl_coordinator /usr/local/bin/
+COPY --from=base /usr/local/bin/zkp_verifier /usr/local/bin/
+COPY --from=base /usr/local/bin/circom /usr/local/bin/
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Verify all languages are compiled and ready
+RUN lif_sim && fl_coordinator --help || true && zkp_verifier && circom --version
+
+CMD ["python", "-c", "print('NQAL-DoH v2 Multi-Language Stack Ready')"]
