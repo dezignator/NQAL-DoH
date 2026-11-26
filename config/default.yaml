@@ -1,0 +1,227 @@
+# =============================================================================
+# NQAL-DoH Master Configuration
+# Every parameter referenced in the paper is exposed here for reproducibility.
+# =============================================================================
+
+project:
+  name: NQAL-DoH
+  version: 2.0.0
+  seed: 42
+  deterministic: true
+  output_dir: artifacts
+
+# -----------------------------------------------------------------------------
+# Dataset (Section 4.1, "Dataset Generation")
+# -----------------------------------------------------------------------------
+data:
+  num_samples: 50000            # larger than v1 for statistical significance
+  sequence_length: 50
+  num_features: 4               # [packet_size, inter_arrival, entropy, direction]
+  num_classes: 5                # 0:Benign,1:Tunneling,2:C2,3:DGA,4:AdvDoH
+  train_split: 0.70
+  val_split:   0.15
+  test_split:  0.15
+  batch_size: 128
+  num_workers: 4
+  class_balance: equal           # equal | natural
+  noise:
+    benign_gaussian_sigma: 100.0
+    tunneling_entropy_range: [0.80, 1.00]
+    c2_period_range_sec: [5.0, 15.0]
+    dga_entropy_range: [0.60, 0.90]
+    adversarial_epsilon: 0.03
+
+# -----------------------------------------------------------------------------
+# Neuromorphic encoder (Eq. 1)
+# -----------------------------------------------------------------------------
+encoding:
+  method: rate                   # rate | latency | delta
+  tls_metadata_dim: 8
+  tls_mask_dropout: 0.10
+
+# -----------------------------------------------------------------------------
+# SNN + LIF neurons (Section 3.1, Eq. 11)
+# -----------------------------------------------------------------------------
+snn:
+  num_neurons: 128
+  hidden_layers: 2
+  tau_mem: 20.0                  # ms
+  tau_syn: 5.0                   # ms
+  v_threshold: 1.0
+  v_reset: 0.0
+  refractory_ms: 2.0
+  surrogate:
+    type: fast_sigmoid
+    slope: 10.0
+  stdp:
+    enabled: true
+    a_plus: 0.01
+    a_minus: 0.012
+    tau_plus: 20.0
+    tau_minus: 20.0
+    w_min: 0.0
+    w_max: 1.0
+
+# -----------------------------------------------------------------------------
+# Dynamic Spiking Graph Attention (Eq. 2)
+# -----------------------------------------------------------------------------
+dsgat:
+  hidden_dim: 64
+  num_heads: 4
+  dropout: 0.10
+  attention_temperature: 1.0
+  graph_construction: knn       # knn | threshold | fully_connected
+  knn_k: 5
+  edge_threshold: 0.10
+
+# -----------------------------------------------------------------------------
+# Quantum Noise Injection (Eq. 3, Eq. 4)
+# -----------------------------------------------------------------------------
+qni:
+  noise_scale_eta: 0.05
+  qrw_steps: 10
+  hamiltonian:
+    type: transverse_field_ising
+    coupling_j: 1.0
+    field_h: 0.5
+  adversarial_loss:
+    lambda_kl: 0.10
+    epsilon: 0.05
+
+# -----------------------------------------------------------------------------
+# Zero-Knowledge Proof Learning (Eq. 5, Eq. 6)
+# -----------------------------------------------------------------------------
+zkp:
+  backend: groth16               # groth16 | stark
+  curve: bn128
+  threshold_tau: 0.70
+  circuit:
+    max_spike_sum: 64
+    range_check_bits: 8
+  proof:
+    compression: true
+    verify_on_gpu: false
+
+# -----------------------------------------------------------------------------
+# Swarm-Based Federated Learning (Eq. 7)
+# -----------------------------------------------------------------------------
+federated:
+  num_clients: 10
+  communication_rounds: 20
+  local_epochs: 3
+  client_fraction: 1.0           # all clients participate every round
+  swarm_beta: 0.10
+  pheromone_fn: tanh             # tanh | sigmoid | relu
+  compression:
+    enabled: true
+    top_k: 0.10                  # top-10% of coordinates by magnitude
+    quantization_bits: 8
+  privacy:
+    differential_privacy: true
+    dp_epsilon: 1.0
+    dp_delta: 1e-5
+
+# -----------------------------------------------------------------------------
+# Threat Immunization Engine (Eq. 8)
+# -----------------------------------------------------------------------------
+gan:
+  latent_dim: 32
+  gen_hidden: 64
+  disc_hidden: 64
+  adv_weight_gamma: 0.10
+  lr_g: 2.0e-4
+  lr_d: 2.0e-4
+  train_steps: 2000
+  batch_size: 128
+  feature_matching: true
+
+# -----------------------------------------------------------------------------
+# Training
+# -----------------------------------------------------------------------------
+training:
+  optimizer: adam
+  learning_rate: 1.0e-3
+  weight_decay: 1.0e-4
+  num_epochs: 50
+  grad_clip_norm: 1.0
+  lr_scheduler:
+    type: cosine
+    warmup_epochs: 3
+  adversarial_training:
+    enabled: true
+    mix_ratio: 0.50
+    fgsm_epsilon: 0.03
+    pgd_epsilon: 0.05
+    pgd_alpha: 0.01
+    pgd_steps: 10
+  early_stopping:
+    enabled: true
+    patience: 8
+    monitor: val_accuracy
+
+# -----------------------------------------------------------------------------
+# Hardware simulation (Section 3.9, Eq. 9)
+# -----------------------------------------------------------------------------
+hardware:
+  profile: loihi2                # loihi2 | akida | gpu_baseline
+  profiles:
+    loihi2:
+      energy_per_spike_pj: 0.10
+      max_neurons_per_core: 1024
+      num_cores: 128
+      clock_mhz: 1000
+      latency_scale: 0.010
+    akida:
+      energy_per_spike_pj: 0.12
+      max_neurons_per_core: 1200
+      num_cores: 80
+      clock_mhz: 800
+      latency_scale: 0.013
+    gpu_baseline:
+      energy_per_inference_mj: 5.0
+      latency_ms: 12.0
+  sparsity_penalty_lambda: 0.01
+  target_energy_reduction: 10.0
+
+# -----------------------------------------------------------------------------
+# Attacks (Section 4.2.1)
+# -----------------------------------------------------------------------------
+attacks:
+  fgsm:
+    epsilon: 0.03
+  pgd:
+    epsilon: 0.05
+    alpha: 0.01
+    steps: 10
+  quantum_noise:
+    epsilon: 0.05
+    qrw_steps: 10
+  adaptive:
+    enabled: true
+    iterations: 20
+    restarts: 3
+
+# -----------------------------------------------------------------------------
+# Evaluation
+# -----------------------------------------------------------------------------
+evaluation:
+  metrics:
+    - accuracy
+    - fpr
+    - detection_rate
+    - latency_ms
+    - energy_uj
+    - adversarial_robustness
+    - zero_day_block_rate
+  targets:
+    accuracy: 0.9918
+    fpr_max: 0.005
+    latency_ms_max: 1.0
+    energy_reduction_min: 10.0
+    fgsm_pgd_robustness: 0.94
+    qni_prevention: 1.00
+    dns_tunneling_detection: 0.987
+    c2_beaconing_accuracy: 0.992
+    dga_precision: 0.975
+    zero_day_block: 0.963
+  num_seeds: 5                   # run 5 seeds, report mean ± std
