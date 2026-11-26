@@ -1,0 +1,51 @@
+name: Paper reproduction
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"   # every Monday 03:00 UTC
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  reproduce:
+    name: Reproduce paper artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Full reproduction
+        run: bash run_all_experiments.sh
+
+      - name: Assert headline metrics
+        run: |
+          python - <<'PY'
+          import json, sys
+          with open("artifacts/results/evaluation_report.json") as f:
+              r = json.load(f)
+          tgt = r["target_hits"]
+          failed = [k for k, v in tgt.items() if not v]
+          if failed:
+              print("FAILED targets:", failed)
+              sys.exit(1)
+          print("All paper targets HIT:", tgt)
+          PY
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nqal-paper-reproduction
+          path: |
+            artifacts/results/
+            artifacts/checkpoints/nqal_final.pt
+          retention-days: 30
